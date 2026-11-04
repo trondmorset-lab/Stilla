@@ -1,0 +1,96 @@
+name: Build macOS (VST3 + AU)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write   # trengs for å lage release
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache JUCE
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: stilla-juce-9.0.5-${{ runner.os }}
+
+      - name: Configure
+        run: cmake -B build -G Xcode -DSTILLA_BUILD_TESTS=ON
+
+      - name: Build
+        run: cmake --build build --config Release --target Stilla_VST3 Stilla_AU DspTest -- -quiet
+
+      - name: DSP-test
+        run: ./build/Release/DspTest
+
+      - name: Ad hoc-signering (kreves for Apple Silicon)
+        run: |
+          codesign --force --deep --sign - "build/Stilla_artefacts/Release/VST3/Stilla.vst3"
+          codesign --force --deep --sign - "build/Stilla_artefacts/Release/AU/Stilla.component"
+
+      - name: Valider med pluginval
+        run: |
+          curl -sSL -o pluginval.zip https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_macOS.zip
+          unzip -q pluginval.zip
+          pluginval.app/Contents/MacOS/pluginval --strictness-level 5 --skip-gui-tests \
+            --validate "build/Stilla_artefacts/Release/VST3/Stilla.vst3"
+
+      - name: Pakk zip
+        run: |
+          mkdir -p dist
+          cp -R "build/Stilla_artefacts/Release/VST3/Stilla.vst3" dist/
+          cp -R "build/Stilla_artefacts/Release/AU/Stilla.component" dist/
+          ditto -c -k --keepParent dist Stilla-macOS.zip
+
+      - name: Lag installasjonsfil (.pkg)
+        run: |
+          VERSION=$(sed -n 's/^project(Stilla VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+          ID=no.trondmorset.stilla
+
+          # Én pakke per format, hver med sin installasjonsmappe
+          make_component () {   # $1 = kilde-bundle, $2 = navn, $3 = installasjonsmappe
+            mkdir -p "pkgroot/$2"
+            cp -R "$1" "pkgroot/$2/"
+            pkgbuild --analyze --root "pkgroot/$2" "$2.plist"
+            # Hindre at installeren "flytter" pluginen til en gammel kopi et annet sted
+            plutil -replace 0.BundleIsRelocatable -bool NO "$2.plist"
+            pkgbuild --root "pkgroot/$2" --component-plist "$2.plist" \
+              --identifier "$ID.$2" --version "$VERSION" --install-location "$3" "$2.pkg"
+          }
+          make_component "build/Stilla_artefacts/Release/VST3/Stilla.vst3"     vst3 "/Library/Audio/Plug-Ins/VST3"
+          make_component "build/Stilla_artefacts/Release/AU/Stilla.component" au   "/Library/Audio/Plug-Ins/Components"
+
+          # Samle til én installer med tittel
+          productbuild --synthesize --package vst3.pkg --package au.pkg distribution.xml
+          sed -i '' 's#<installer-gui-script minSpecVersion="[0-9]*">#&<title>Stilla</title>#' distribution.xml
+          productbuild --distribution distribution.xml --package-path . "Stilla-$VERSION-macOS.pkg"
+          cp "Stilla-$VERSION-macOS.pkg" Stilla-macOS.pkg
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Stilla-macOS
+          path: |
+            Stilla-macOS.zip
+            Stilla-macOS.pkg
+
+      # Ny release lages automatisk når versjonen i CMakeLists.txt ikke har en release fra før
+      - name: Release (ny versjon på main)
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v$(sed -n 's/^project(Stilla VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG finnes allerede – øk VERSION i CMakeLists.txt for en ny release."
+          else
+            gh release create "$TAG" Stilla-macOS.pkg Stilla-macOS.zip --target "$GITHUB_SHA" \
+              --title "Stilla $TAG" \
+              --notes "Stilla feedback-demper. VST3 og AU for macOS (Apple Silicon + Intel). Dobbeltklikk .pkg for å installere, eller bruk zip-fila og kopier pluginene manuelt."
+          fi
