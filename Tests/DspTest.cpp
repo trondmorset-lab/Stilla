@@ -5,7 +5,7 @@
 #include "dsp/FeedbackSuppressor.h"
 #include <cstdio>
 #include <vector>
-#include <random>
+#include <cstdint>
 #include <chrono>
 #include <functional>
 
@@ -20,15 +20,32 @@ static void check (bool ok, const char* what)
 
 static float fromDb (float db) { return std::pow (10.0f, db / 20.0f); }
 
+// Egen tilfeldig-generator: std::-fordelingene gir ulike tall på Mac og Linux,
+// og da blir rommene i sløyfetesten forskjellige fra plattform til plattform.
+struct Random
+{
+    uint32_t state;
+    explicit Random (uint32_t seed) : state (seed * 2654435761u + 1u) {}
+    float uniform()   // -1 til 1
+    {
+        state ^= state << 13; state ^= state >> 17; state ^= state << 5;
+        return (float) state / 2147483648.0f - 1.0f;
+    }
+    float gauss()     // normalfordelt (Box–Muller)
+    {
+        const float u1 = 0.5f * (uniform() + 1.0f) + 1.0e-7f, u2 = uniform();
+        return std::sqrt (-2.0f * std::log (u1)) * std::cos ((float) kPi * u2);
+    }
+};
+
 // Rosa støy (Paul Kellets filter), ca. -10 dBFS RMS ved amplitude 1
 struct Pink
 {
-    std::mt19937 rng { 1 };
-    std::uniform_real_distribution<float> uni { -1.0f, 1.0f };
+    Random rng { 1 };
     float b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
     float next()
     {
-        const float w = uni (rng);
+        const float w = rng.uniform();
         b0 = 0.99886f * b0 + w * 0.0555179f; b1 = 0.99332f * b1 + w * 0.0750759f;
         b2 = 0.96900f * b2 + w * 0.1538520f; b3 = 0.86650f * b3 + w * 0.3104856f;
         b4 = 0.55000f * b4 + w * 0.5329522f; b5 = -0.7616f * b5 - w * 0.0168980f;
@@ -75,11 +92,10 @@ struct FeedbackLoop
 
     explicit FeedbackLoop (unsigned seed)
     {
-        std::mt19937 rng (seed);
-        std::normal_distribution<float> gauss;
+        Random rng (seed);
         ir.resize (irLength);
         for (int k = 0; k < irLength; ++k)
-            ir[(size_t) k] = gauss (rng) * std::exp (-(float) k / (0.015f * (float) fs));
+            ir[(size_t) k] = rng.gauss() * std::exp (-(float) k / (0.015f * (float) fs));
         ir[0] += 3.0f;   // direktelyd
 
         // Høyttaler, mikrofon og luft demper diskant og dypbass: lavpass ~5 kHz og høypass ~120 Hz
@@ -209,11 +225,11 @@ int main()
     {
         FeedbackSuppressor s; s.prepare (fs); s.setSettings ({});
         float x[256], ref[256]; float* ch[1] = { x };
-        std::mt19937 rng (3); std::uniform_real_distribution<float> uni (-0.1f, 0.1f);
+        Random rng (3);
         float maxErr = 0;
         for (int b = 0; b < 200; ++b)
         {
-            for (int i = 0; i < 256; ++i) x[i] = ref[i] = uni (rng);
+            for (int i = 0; i < 256; ++i) x[i] = ref[i] = 0.1f * rng.uniform();
             s.process (ch, 1, 256);
             for (int i = 0; i < 256; ++i) maxErr = std::max (maxErr, std::abs (x[i] - ref[i]));
         }
