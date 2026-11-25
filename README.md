@@ -1,87 +1,89 @@
-<img src="assets/stilla-logo-256.png" width="128" alt="Stilla-logo">
+<img src="assets/stilla-logo-256.png" width="128" alt="Stilla logo">
 
 # Stilla
 
-Feedback-demper for live lyd i VST3-format (og AU på Mac). Stilla finner feedback automatisk og setter et smalt kutt-filter på akkurat den frekvensen. Alt er IIR, så pluginen har **0 samples latens**. Bygget med JUCE 9.0.5.
+*English · [Norsk](README.no.md)*
 
-![Skjermbilde](screenshot.png)
+Feedback suppressor for live sound in VST3 format (and AU on Mac). Stilla detects feedback automatically and places a narrow notch filter on exactly that frequency. Everything is IIR, so the plugin has **0 samples of latency**. Built with JUCE 9.0.5.
 
-## Slik fungerer det
+![Screenshot](screenshot.png)
 
-Feedback er en ren tone som står helt stille i frekvens og bygger seg opp. Stemmer og instrumenter har overtoner, vibrato og varierende nivå. Stilla analyserer inngangen med FFT hvert ~10 ms og ser etter topper som:
+## How it works
 
-1. stikker langt opp over spekteret rundt seg,
-2. mangler overtoner og undertoner,
-3. står på samme frekvens (innenfor ~6 Hz) uten å falle i nivå i hele **Detect Time**.
+Feedback is a pure tone that stays perfectly still in frequency and keeps building up. Voices and instruments have overtones, vibrato and changing levels. Stilla analyses the input with an FFT about every 10 ms and looks for peaks that:
 
-Når alle tre er oppfylt, settes en notch på 6 dB. Kommer feedbacken tilbake på samme sted, blir notchen 3 dB dypere hver gang, opptil **Max Depth**. Dybden glir inn på ca. 5 ms og ut på ca. 1,5 s, så notcher kommer og går uten klikk.
+1. stand well above the surrounding spectrum,
+2. have no overtones or undertones,
+3. stay on the same frequency (within ~6 Hz) without dropping in level for the whole **Detect Time**.
 
-I en simulert feedback-sløyfe (testene) gir Stilla **5–8 dB mer gain før feedback** og bruker under 3 % CPU med alle 24 notcher aktive.
+When all three are met, a 6 dB notch is set. If the feedback returns at the same spot, the notch gets 3 dB deeper each time, up to **Max Depth**. The depth fades in over about 5 ms and out over about 1.5 s, so notches come and go without clicks.
 
-## Arbeidsflyt
+In a simulated feedback loop (see the tests), Stilla gives **5–8 dB more gain before feedback** and uses under 3 % CPU with all 24 notches active.
 
-1. **Lydsjekk:** slå på **Learn** og ring ut rommet ved å skru opp gain forsiktig. Notchene som settes nå er **faste** (blå) og blir stående. De lagres i prosjektet.
-2. **Konsert:** slå av Learn. Ny feedback får **live-notcher** (oransje), som slippes igjen etter **Release**-tiden hvis feedbacken ikke kommer tilbake.
-3. **Freeze** stopper nye notcher, for eksempel under et parti med en ren, liggende tone som ikke skal kuttes.
+## Workflow
 
-## Kontroller
+1. **Sound check:** turn on **Learn** and ring out the room by carefully raising the gain. Notches set now are **fixed** (blue) and stay put. They are saved with the project.
+2. **Show:** turn off Learn. New feedback gets **live notches** (orange), which are released again after the **Release** time if the feedback does not return.
+3. **Freeze** stops new notches, for example during a passage with a pure, sustained tone that should not be cut.
 
-| Kontroll | Hva den gjør |
+## Controls
+
+| Control | What it does |
 |---|---|
-| **Sensitivity** (0–100 %) | Hvor tydelig toppen må være. Høyere fanger feedback tidligere, men gir flere feiltreff. |
-| **Detect Time** (50–1000 ms) | Hvor lenge en tone må stå før den regnes som feedback. Kortere er raskere, lengre gir færre feiltreff. |
-| **Max Depth** (6–30 dB) | Dypeste kutt per notch. |
-| **Width** (1/60–1/3 oktav) | Bredden på hver notch. Smalere påvirker lyden mindre. Standard er 1/10 oktav. |
-| **Release** (1–60 s) | Hvor lenge en live-notch står etter at feedbacken er borte. |
-| **Low / High** | Frekvensområdet detektoren lytter på. Området utenfor er skyggelagt i spekteret. |
-| **Output** | Utgangsnivå. |
-| **Learn** | Nye notcher blir faste. |
-| **Freeze** | Ingen nye notcher. |
-| **Hold Live** | Live-notcher slippes aldri. |
-| **Clear Live / Clear All** | Sletter live-notcher, eller alle. |
+| **Sensitivity** (0–100 %) | How distinct a peak must be. Higher catches feedback earlier but gives more false hits. |
+| **Detect Time** (50–1000 ms) | How long a tone must last before it counts as feedback. Shorter is faster, longer gives fewer false hits. |
+| **Max Depth** (6–30 dB) | Deepest cut per notch. |
+| **Width** (1/60–1/3 octave) | Width of each notch. Narrower affects the sound less. Default is 1/10 octave. |
+| **Release** (1–60 s) | How long a live notch stays after the feedback is gone. |
+| **Low / High** | The frequency range the detector listens to. The range outside is shaded in the spectrum. |
+| **Output** | Output level. |
+| **Learn** | New notches become fixed. |
+| **Freeze** | No new notches. |
+| **Hold Live** | Live notches are never released. |
+| **Clear Live / Clear All** | Removes live notches, or all of them. |
 
-## Visning
+## Display
 
-- **Spekter:** inngangen i grått, utgangen i blått, med 4,5 dB/okt helning.
-- **Hvit kurve:** samlet respons for alle notcher (0 til -36 dB).
-- **Trekanter øverst:** én per notch, oransje for live og blå for faste.
-- **Liste til høyre:** alle aktive notcher med frekvens, dybde og type.
+- **Spectrum:** input in grey, output in blue, with a 4.5 dB/oct tilt.
+- **White curve:** combined response of all notches (0 to −36 dB).
+- **Triangles at the top:** one per notch, orange for live and blue for fixed.
+- **List on the right:** all active notches with frequency, depth and type.
 
-## Begrensninger
+## Limitations
 
-- En helt ren, liggende tone uten vibrato (fløyte, synth, sinustone) ligner feedback og kan få en notch. Bruk **Freeze**, eller sett **Low/High** utenom tonen.
-- Stilla demper feedback med notcher. Den fjerner ikke romklang eller bakgrunnsstøy, slik AI-baserte verktøy med høyere latens gjør.
+- A perfectly pure, sustained tone without vibrato (flute, synth, sine wave) looks like feedback and may get a notch. Use **Freeze**, or set **Low/High** to exclude the tone.
+- Stilla suppresses feedback with notches. It does not remove reverb or background noise the way AI-based tools with higher latency do.
 
-## Bygging
+## Building
 
-### Via GitHub (anbefalt)
-Workflowen i `.github/workflows/build-macos.yml` bygger VST3 og AU som universal binary (Apple Silicon og Intel), kjører DSP-testene og pluginval, og lager en `.pkg`-installer. Ferdige versjoner ligger under **Releases**. En ny release lages automatisk når `VERSION` i `CMakeLists.txt` økes og pushes til `main`.
+### Via GitHub (recommended)
+The workflow in `.github/workflows/build-macos.yml` builds VST3 and AU as a universal binary (Apple Silicon and Intel), runs the DSP tests and pluginval, and creates a `.pkg` installer. Finished versions are under **Releases**. A new release is created automatically when `VERSION` in `CMakeLists.txt` is increased and pushed to `main`.
 
-### Lokalt på Mac
+### Locally on Mac
 ```bash
 cmake -B build -G Xcode
 cmake --build build --config Release --target Stilla_VST3 Stilla_AU
 ```
-Kopier `Stilla.vst3` til `~/Library/Audio/Plug-Ins/VST3/` og `Stilla.component` til `~/Library/Audio/Plug-Ins/Components/`.
+Copy `Stilla.vst3` to `~/Library/Audio/Plug-Ins/VST3/` and `Stilla.component` to `~/Library/Audio/Plug-Ins/Components/`.
 
-## Tester
-`cmake -B build -DSTILLA_BUILD_TESTS=ON`, deretter:
-- `DspTest`: notch-filteret, transparens, deteksjon av voksende tone, feiltreff på støy, sang og tale, Learn/Release/Freeze, en simulert feedback-sløyfe i tre rom og CPU.
-- `HostTest <plugin.vst3> <bilde.png>`: laster selve VST3-fila, tester 44,1/48/96 kHz og blokker på 32–1024 samples, tilfeldig automasjon, state med faste notcher, bypass og latens.
-- `GuiSnapshot <bilde.png>`: tegner GUI-et med noen notcher.
+## Tests
+`cmake -B build -DSTILLA_BUILD_TESTS=ON`, then:
+- `DspTest`: the notch filter, transparency, detection of a growing tone, false hits on noise, singing and speech, Learn/Release/Freeze, a simulated feedback loop in three rooms, and CPU.
+- `HostTest <plugin.vst3> <image.png>`: loads the actual VST3 file, tests 44.1/48/96 kHz and blocks of 32–1024 samples, random automation, state with fixed notches, bypass and latency.
+- `GuiSnapshot <image.png>`: draws the GUI with a few notches.
 
-## Kodestruktur
-| Fil | Innhold |
+## Code structure
+| File | Contents |
 |---|---|
-| `Source/dsp/HowlDetector.h` | Finner feedback: FFT, spektrale krav og sporing over tid. |
-| `Source/dsp/NotchBank.h` | De 24 notchene: live og faste, dypere ved gjentakelse, release. |
-| `Source/dsp/NotchFilter.h` | Selve kutt-filteret (SVF) og den eksakte responsen til GUI-kurven. |
-| `Source/dsp/FeedbackSuppressor.h` | Kobler detektor og notcher sammen. |
-| `Source/dsp/Fft.h` | Liten FFT uten allokering. |
-| `Source/PluginProcessor.*` | Parametere, lagring av faste notcher, kobling mot verten. |
-| `Source/PluginEditor.*` | Spekter, notch-liste og kontroller. |
+| `Source/dsp/HowlDetector.h` | Finds feedback: FFT, spectral criteria and tracking over time. |
+| `Source/dsp/NotchBank.h` | The 24 notches: live and fixed, deeper on repeat, release. |
+| `Source/dsp/NotchFilter.h` | The notch filter itself (SVF) and the exact response for the GUI curve. |
+| `Source/dsp/FeedbackSuppressor.h` | Connects the detector and the notches. |
+| `Source/dsp/Fft.h` | Small allocation-free FFT. |
+| `Source/PluginProcessor.*` | Parameters, saving fixed notches, host integration. |
+| `Source/PluginEditor.*` | Spectrum, notch list and controls. |
 
-DSP-koden i `Source/dsp/` har ingen JUCE-avhengighet og kan testes for seg.
+The DSP code in `Source/dsp/` has no JUCE dependency and can be tested on its own.
 
-## Lisens
-JUCE er lisensiert under AGPLv3 eller kommersiell lisens. For privat bruk er det uproblematisk. Skal pluginen deles eller selges som lukket kode, kan det kreves en kommersiell JUCE-lisens.
+## License
+JUCE is licensed under AGPLv3 or a commercial license. For private use this is not a problem. If the plugin is shared or sold as closed source, a commercial JUCE license may be required.
